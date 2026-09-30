@@ -477,6 +477,7 @@ body::before {
 .ai-prompt-copy { margin-top:9px; border:0; border-radius:16px; padding:7px 15px; background:rgba(42,35,26,.07); color:var(--ink-mid); font-size:12px; cursor:pointer; }
 .ai-prompt-copy:active { background:rgba(42,35,26,.13); }
 
+.modal-box input[type=date] { font-family:inherit; }
 /* ===== Mastered celebration ===== */
 .celebrate-overlay {
   position:fixed; inset:0; z-index:80;
@@ -530,7 +531,7 @@ body::before {
   <div id="auth-view" style="display:none">
     <div class="auth-box">
       <div class="auth-logo">知识点笔记本</div>
-      <div class="auth-sub">从零开始，建立自己的笔记本</div>
+      <div class="auth-sub">注册后从零开始，建立自己的笔记本</div>
       <input id="auth-email" class="auth-input" type="email" placeholder="邮箱" autocomplete="email">
       <input id="auth-pass" class="auth-input" type="password" placeholder="密码（至少6位）" autocomplete="new-password">
       <button class="auth-btn" id="auth-submit" onclick="authSubmit()">注册并登录</button>
@@ -573,7 +574,23 @@ body::before {
   </div>
 
   <!-- NEW NOTEBOOK MODAL -->
-  <div id="nb-modal" class="modal-mask" style="display:none">
+  
+  <!-- GOAL MODAL -->
+  <div id="goal-modal" class="modal-mask" style="display:none">
+    <div class="modal-box">
+      <div class="modal-title">设置目标</div>
+      <div class="add-hint">给目标起个名字，例如「法硕上岸」「考研」；再用日历选择目标日期。</div>
+      <input id="goal-name" class="add-input" placeholder="目标名称，如：法硕上岸">
+      <input id="goal-date" class="add-input" type="date">
+      <div class="add-actions">
+        <button onclick="closeGoalModal()">取消</button>
+        <button class="primary" onclick="saveGoal()">保存</button>
+      </div>
+      <div class="add-msg" id="goal-msg"></div>
+    </div>
+  </div>
+
+<div id="nb-modal" class="modal-mask" style="display:none">
     <div class="modal-box">
       <div class="modal-title">新建笔记本</div>
       <div class="add-hint">给笔记本起个名字，例如「刑法」「法理学」「我的冲刺本」。</div>
@@ -739,7 +756,7 @@ const SUBJECTS = [
 const MASTERED_SUBJECT = { id: '__mastered__', name: '已掌握', colorA: '#4a7c4e', colorB: '#2d5e32' };
 
 // =====================================================
-// 知识点笔记本 · 多用户云版本
+// 法硕知识点 · 多用户云版本
 // Supabase Auth + 每动作云同步（本地为缓存，云端为真源）
 // =====================================================
 
@@ -1474,24 +1491,46 @@ function systemBatchAction(){
   }
   persist();currentCards=systemCards(currentNotebookId);currentIndex=0;renderCardView();renderHome();
 }
-// =====================================================
-// 倒计时
-// =====================================================
-const EXAM_DATE = new Date(2026, 11, 19);
-function countdownDays() {
-  const now = new Date();
-  const diff = new Date(EXAM_DATE.getFullYear(), EXAM_DATE.getMonth(), EXAM_DATE.getDate()) -
-               new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return Math.ceil(diff/86400000);
+function goalName(){ return currentData().goalName || ''; }
+function goalDate(){ return currentData().goalDate || ''; }
+function openGoalModal(){
+  const m=document.getElementById('goal-modal'); m.style.display='flex';
+  document.getElementById('goal-name').value=goalName();
+  document.getElementById('goal-date').value=goalDate()||'';
+  document.getElementById('goal-msg').textContent='';
 }
-function countdownHtml() {
-  const d = countdownDays();
-  if (d<0) return '<div class="home-countdown">📚 考研已开考</div>';
-  if (d===0) return '<div class="home-countdown hot">🎯 就是今天！</div>';
-  return `<div class="home-countdown${d<=30?' hot':''}">距考研还有 ${d} 天</div>`;
+function closeGoalModal(){ document.getElementById('goal-modal').style.display='none'; }
+function saveGoal(){
+  const name=document.getElementById('goal-name').value.trim();
+  const date=document.getElementById('goal-date').value;
+  const msg=document.getElementById('goal-msg');
+  if(!name){msg.textContent='请填写目标名称';return;}
+  if(!date){msg.textContent='请选择目标日期';return;}
+  cloudData.goalName=name.slice(0,20);
+  cloudData.goalDate=date;
+  persist(); closeGoalModal(); renderHome();
 }
 
 // =====================================================
+// 倒计时
+// =====================================================
+function countdownDays() {
+  const gd=goalDate();
+  if(!gd) return null;
+  const y=parseInt(gd.slice(0,4)), m=parseInt(gd.slice(5,7))-1, dd=parseInt(gd.slice(8,10));
+  const target=new Date(y,m,dd);
+  const now=new Date();
+  const diff=new Date(target.getFullYear(),target.getMonth(),target.getDate())-new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  return Math.ceil(diff/86400000);
+}
+function countdownHtml() {
+  const name=goalName();
+  const d=countdownDays();
+  if(d===null) return '<div class="home-countdown" onclick="openGoalModal()">🎯 未设置目标 · 点此设置</div>';
+  if(d<0) return `<div class="home-countdown" onclick="openGoalModal()">🎯 ${escHtml(name)}已到期 · 点此修改</div>`;
+  if(d===0) return `<div class="home-countdown hot" onclick="openGoalModal()">🎯 就是今天！${escHtml(name)}</div>`;
+  return `<div class="home-countdown${d<=30?' hot':''}" onclick="openGoalModal()">🎯 距离${escHtml(name)}还剩 ${d} 天</div>`;
+}// =====================================================
 // INIT
 // =====================================================
 (async function init() {
